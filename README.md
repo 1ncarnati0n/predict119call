@@ -60,4 +60,10 @@ $$ MAPE =  \frac{1}{n} \sum^n_{t=1} \left|\frac{yt-\hat{y}t}{yt}\right| $$
 
 ## 탐색적 데이터분석 EDA
 
+## 피쳐엔지니어링
 
+## 모델선정 및 훈련
+
+## 한계 점
+
+## 결과
