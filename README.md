@@ -90,7 +90,7 @@ $$ MAPE = \frac{1}{n} \sum^n_{t=1} \left|\frac{yt-\hat{y}t}{yt}\right| $$
 
 우선 **시계열 데이터**에 대한 간단한 **LSTM 모델**을 적용한 예측을 시도해보았습니다.
 
-```
+``` python
 class LSTM(nn.Module):
     def __init__(self, input_dim, output_dim, hidden_size):
         super().__init__()
