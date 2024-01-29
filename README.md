@@ -64,13 +64,15 @@ $$ MAPE = \frac{1}{n} \sum^n_{t=1} \left|\frac{yt-\hat{y}t}{yt}\right| $$
 ## 데이터 전처리
 <p align='center'><img src="assets/fig00.png" width="240"> <img src="assets/fig02.png" width="340"></p>
 
-**input**: 전일오후6시-오전9시 119신고접수량 
 
-집계시간은 인풋데이터를 보면 집계시점으로 6시간 전을 시작으로 6시간 단위로 접수량을 집계, <br>그리고 기존데이터가 'data type'이 아닌 '문자열 string'으로 되어있어 데이터전처리가 불가피했습니다.
+
+- 기존데이터가 'data type'이 아닌 '문자열 string'으로 되어있어 데이터전처리가 불가피했습니다.
+- **input**: 전일 오후6시 ~ 해당일 오전9시 119신고접수량 
+- 인풋데이터를 보면 6시간 전을 포함하여 기준일로 전날의 마지막 6시간을 맞물려 데이터를 가지고 있습니다. 추후 접수량계산시 해당일에 맞추는 번거로운 작업을 피하기 위해 접수일시를 6시간 밀려서 접수건과 접수일이 일치하도록 전처리를 진행했습니다.
 
 <p align='center'><img src="assets/fig03.png" width="560"> <img src="assets/fig04.png" width="130"></p>
 
-그러므로 전처리 후 시간대별 접수량 집계데이터 생성했습니다.
+전처리 접수시간대인'hour'를 기준으로 집계량 y을 생성하여 시계열분석을 위한 준비를 완료했습니다.
 
 <br>
 
@@ -113,7 +115,7 @@ class LSTM(nn.Module):
         return x
 ```
 
-train 데이터에 대하여 7:3 비율로 vaild 를 설정하고 훈련.
+Train 데이터에 대하여 7:3 비율로 vaild 를 설정하고 훈련.
 <p align='center'><img src="assets/fig08.png" width="320"></p>
 
 어느정도 학습이 되어 가는 것으로 확인하였으나,
@@ -132,14 +134,104 @@ train 데이터에 대하여 7:3 비율로 vaild 를 설정하고 훈련.
 
 xgboost 모델에 넣기위해서 시간대별 피쳐들을 생성하고 그 날이 주중인지 주말인지에 대한 피쳐도 추가했습니다.
 
-<p align='center'><img src="assets/fig04.png" width="140"> 👉 <img src="assets/fig10.png" width="295"> <br>
-👇</p>
+<p align='center'><img src="assets/fig11.png" width="680"></p>
 
-<p align='center'><img src="assets/fig11.png" width="640"></p>
+데이터 훈련에 앞서 train, valid 데이터를 나누기전,
+시계열 있는 정형데이터를 반영하기 위해서 valid 데이터를 test 데이터의 2022년 7월 1일 부터 10월 15일 시간대에 맞는 2021년 7월 1일 부터 10월 15일를 특정하여 설정해 주었습니다.
+
+<p align='center'><img src="assets/fig12.png" width="680"></p>
 
 <br>
 
-## 한계 점
+## 모델링 및 훈련
+
+xgboost 모델에 적절한 파라미터를 찾아내기위해 K-fold 교차검증도 같이 수행할 수 있는 그리드서치를 진행했습니다.
+
+### Grid Search Cross Validation
+
+``` python
+# 그리드 서치
+from sklearn.model_selection import GridSearchCV
+
+# Define the parameter grid for grid search
+param_grid = {
+    'n_estimators': [200],
+    'max_depth': [2, 3, 4],
+    'learning_rate': [0.1, 0.01, 0.001],
+    'subsample': [0.8, 1],
+    'colsample_bytree': [0.6, 0.8, 1],
+}
+
+# Create an XGBoost regressor object
+model = XGBRegressor(random_state=42)
+
+# Create a GridSearchCV object with cross-validation
+grid_search = GridSearchCV(estimator=model,
+                           param_grid=param_grid,
+                           scoring='neg_mean_absolute_percentage_error',
+                           cv=5,
+                           )
+
+# Fit the grid search to the training data
+grid_search.fit(X_train, y_train)
+
+# Print the best parameters and best score from grid search
+print("Best Parameters:", grid_search.best_params_)
+print("Best GS Score:", -grid_search.best_score_)
+```
+
+도출된 파라미터로 훈련을 진행했으며
+
+``` python
+# Hyperparameters
+xgb_params = {
+    'learning_rate': 0.1,
+    'n_estimators': 200,
+    'max_depth': 3,
+    'random_state': 42,
+    'subsample': 1,
+    'colsample_bytree': 1
+}
+
+model = XGBRegressor(**xgb_params)
+
+# training
+
+eval_set = [(X_train, y_train), (X_val, y_val)]
+
+model.fit(X=X_train,
+          y=y_train,
+          eval_set=eval_set,
+          eval_metric="mape",
+          early_stopping_rounds=20,
+          verbose=1)
+```
+
+별도로 "early stopping"을 지정하여 과적합을 방지하고자 했습니다.
+
+<p align='center'><img src="assets/fig13.png" width="640"></p>
+
+<br>
 
 ## 결과
+
+- 60명 인원 중 5위를 달성했으며 
+
+- Best 점수는 MAPE: 15.5567, 달성한 점수는 : MAPE:15.8617 로 마감했다.
+
+<p align='center'><img src="assets/fig14.png" height="280"><img src="assets/fig15.png" height="280"></p>
+
+<br>
+
+## 한계점 및 회고
+
+그리드서치통해 얻은 기본 하이퍼파라미터에 Early Stopping을 적용하여 학습했을때 제출한 서브미션에 가장 좋은 final 점수를 얻을수 있었으며, 여러차례 public에서 순위에 오르기 위한 하이퍼파라미더 조정들은 public 예측에서 과적합을 불러올뿐 final 점수를 낮아지기만 했다
+
+- Best Scoring: Public MAPE: 15.7228, Final MAPE: 15.6377
+
+- Submmision: Public MAPE: 15.6143, Final MAPE: 15.8617
+
+최종 제출은 public에서 가장 높은 점수를 얻은 submission 을 제출했지만 final에서 오히려 더 많이 낮은 MAPE 가 나왔습니다.
+
+우승자는 optuna를 사용하여 피쳐엔지니어링을 진행했으며 EDA와 피쳐엔지니어링에 좀더 다양한 시도가 이루워 지지 않은 한계가 아쉬움이 남습니다.
 
