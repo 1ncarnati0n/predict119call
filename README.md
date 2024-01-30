@@ -219,7 +219,7 @@ model.fit(X=X_train,
 
 - 60명 인원 중 5위를 달성했으며 
 
-- Best 점수는 MAPE: 15.5567, 달성한 점수는 MAPE: 15.8617 로 마감했습니다.
+- 대회 최고점수는 MAPE: 15.5567, 달성한 점수는 MAPE: 15.8617 로 마감했습니다.
 
 <p align='center'><img src="assets/fig14.png" height="280"><img src="assets/fig15.png" height="280"></p>
 
